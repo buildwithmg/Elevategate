@@ -1,0 +1,57 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: elevategate
+      POSTGRES_USER: elevategate
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U elevategate"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Not published to the host by default - only `backend` needs to reach it, over the
+    # compose-internal network.
+
+  backend:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://elevategate:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/elevategate
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set JWT_SECRET_KEY in .env}
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-30}
+      ENROLLMENT_KEY: ${ENROLLMENT_KEY:?set ENROLLMENT_KEY in .env}
+      APPROVAL_TTL_SECONDS: ${APPROVAL_TTL_SECONDS:-300}
+      ELEVATION_REQUEST_TTL_SECONDS: ${ELEVATION_REQUEST_TTL_SECONDS:-3600}
+      # Mounted-file secret, never an env var containing the key material itself - see
+      # secrets/README.md and docs/BACKEND_THREAT_MODEL.md.
+      ED25519_PRIVATE_KEY_PATH: /run/secrets/ed25519_private_key
+    secrets:
+      - ed25519_private_key
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/healthz').status == 200 else 1)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+secrets:
+  ed25519_private_key:
+    file: ./secrets/ed25519_private_key.b64
+
+volumes:
+  postgres_data:

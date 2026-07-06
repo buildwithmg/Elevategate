@@ -1,0 +1,26 @@
+namespace ElevateGate.Service.Options;
+
+public sealed class ElevateGateServiceOptions
+{
+    public const string SectionName = "ElevateGate";
+
+    /// <summary>Base URL of the backend API, e.g. https://elevategate.keystoneuae.com/.</summary>
+    public string BackendBaseUrl { get; set; } = string.Empty;
+
+    /// <summary>Base64-encoded Ed25519 public key, pinned at deployment time — never fetched at runtime.</summary>
+    public string ServerPublicKeyBase64 { get; set; } = string.Empty;
+
+    /// <summary>How often to poll the backend for outstanding decisions.</summary>
+    public int PollingIntervalSeconds { get; set; } = 15;
+
+    /// <summary>Directory for local state: device credential, nonce ledger, audit log, logs. Defaults to ProgramData.</summary>
+    public string DataDirectory { get; set; } = @"C:\ProgramData\ElevateGate";
+
+    public string PipeName { get; set; } = "ElevateGate.Agent";
+
+    /// <summary>Absolute path the connecting pipe client's process image must match exactly.</summary>
+    public string ExpectedTrayExecutablePath { get; set; } = @"C:\Program Files\ElevateGate\ElevateGate.Tray.exe";
+
+    /// <summary>How long an approval request may remain pending before the service gives up on it locally.</summary>
+    public int RequestTimeToLiveMinutes { get; set; } = 30;
+}
