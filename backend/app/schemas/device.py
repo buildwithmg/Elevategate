@@ -41,7 +41,7 @@ class DeviceRead(BaseModel):
     device_uuid: uuid.UUID
     hostname: str
     operating_system: str
-    agent_version: str
+    agent_version: str | None
     last_seen: datetime | None
     enrollment_status: EnrollmentStatus
     # Server-computed (enrollment_status == active AND last_seen within

@@ -69,7 +69,7 @@ export function PendingRequestsProvider({ children }: { children: ReactNode }) {
 
     for (const item of freshlyArrived) {
       toast.info("New elevation request", {
-        description: `${item.username} wants to run ${item.filename} on device #${item.device_id}.`,
+        description: `${item.username ?? "Someone"} wants to run ${item.filename} on device #${item.device_id}.`,
       });
     }
 

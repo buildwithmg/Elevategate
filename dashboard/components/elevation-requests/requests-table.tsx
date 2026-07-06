@@ -94,7 +94,7 @@ export function RequestsTable({ statusFilter }: { statusFilter: ElevationRequest
               <TableCell>
                 <StatusBadge status={item.status} />
               </TableCell>
-              <TableCell>{item.username}</TableCell>
+              <TableCell>{item.username ?? "—"}</TableCell>
               <TableCell>{item.device_hostname}</TableCell>
               <TableCell className="max-w-48 truncate" title={item.filename}>
                 {item.filename}

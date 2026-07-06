@@ -48,7 +48,8 @@ export const ElevationRequestSchema = z.object({
   device_id: z.number(),
   device_uuid: z.string(),
   device_hostname: z.string(),
-  username: z.string(),
+  // Null when submitted by the .NET agent, which never captures a Windows username.
+  username: z.string().nullable(),
   filename: z.string(),
   canonical_path: z.string(),
   sha256: z.string(),

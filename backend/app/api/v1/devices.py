@@ -1,9 +1,9 @@
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_device, get_db, require_role
+from app.api.deps import get_current_device, get_db, require_enrollment_key, require_role
 from app.config import get_settings
 from app.core.audit import write_audit_log
 from app.core.rate_limit import limiter
@@ -24,17 +24,11 @@ from app.schemas.device import (
 router = APIRouter(prefix="/devices", tags=["devices"])
 
 
-async def _require_enrollment_key(x_enrollment_key: str = Header(...)) -> None:
-    settings = get_settings()
-    if x_enrollment_key != settings.enrollment_key:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid enrollment key.")
-
-
 @router.post(
     "/enroll",
     response_model=DeviceEnrollResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(_require_enrollment_key)],
+    dependencies=[Depends(require_enrollment_key)],
 )
 @limiter.limit(lambda: get_settings().rate_limit_enroll)
 async def enroll_device(

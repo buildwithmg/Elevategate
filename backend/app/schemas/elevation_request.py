@@ -40,7 +40,9 @@ class ElevationRequestRead(BaseModel):
     # without a separate lookup by device_id on every row.
     device_uuid: uuid.UUID
     device_hostname: str
-    username: str
+    # Null when submitted via the agent-compatible route - the .NET agent never captures the
+    # local Windows username. See docs/API_CONTRACT.md.
+    username: str | None
     filename: str
     canonical_path: str
     sha256: str

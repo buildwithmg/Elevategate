@@ -18,7 +18,9 @@ class Device(Base):
     )
     hostname: Mapped[str] = mapped_column(String(255), nullable=False)
     operating_system: Mapped[str] = mapped_column(String(255), nullable=False)
-    agent_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    # Nullable: a device enrolled via the agent-compatible /api/v1/enroll route doesn't report a
+    # version until its first heartbeat (the .NET agent's EnrollmentRequest has no such field).
+    agent_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
     last_seen: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     enrollment_status: Mapped[EnrollmentStatus] = mapped_column(
         Enum(EnrollmentStatus, name="enrollment_status", native_enum=False, validate_strings=True),

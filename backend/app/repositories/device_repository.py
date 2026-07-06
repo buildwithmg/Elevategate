@@ -24,7 +24,7 @@ async def create(
     device_uuid: uuid.UUID,
     hostname: str,
     operating_system: str,
-    agent_version: str,
+    agent_version: str | None,
     device_secret_hash: str,
 ) -> Device:
     device = Device(

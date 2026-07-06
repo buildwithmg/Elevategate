@@ -20,11 +20,31 @@ _MAX_FIELD_BYTES = 0xFFFF
 
 
 def format_utc_iso(dt: datetime) -> str:
-    """Deterministic UTC ISO-8601 string with microsecond precision and a literal 'Z' suffix."""
+    """Deterministic UTC ISO-8601 string with microsecond precision and a literal 'Z' suffix.
+    Used for ordinary JSON timestamp fields (not the signed canonical payload - see
+    format_dotnet_round_trip below for that)."""
     if dt.tzinfo is None:
         raise ValueError("datetime must be timezone-aware")
     dt_utc = dt.astimezone(timezone.utc)
     return dt_utc.strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z"
+
+
+def format_dotnet_round_trip(dt: datetime) -> str:
+    """
+    Reproduces .NET's `DateTimeOffset.ToString("O")` for a UTC instant byte-for-byte: 7
+    fractional-second digits (Python only has 6, so a trailing zero is appended - lossless, since
+    nothing in this codebase generates finer-than-microsecond timestamps) and a numeric "+00:00"
+    offset rather than "Z". This is the exact format the .NET agent produces when it reformats a
+    deserialized `expiresAtUtc` for signature verification (ElevateGate.Core.Crypto
+    .CanonicalApprovalPayload.Build), so the backend must replicate it to sign bytes the agent can
+    ever validate. Empirically verified against a live .NET probe and against the known-good
+    cross-library interop vector in tests/unit/test_signing.py - do not "simplify" this format
+    without re-verifying against the agent.
+    """
+    if dt.tzinfo is None:
+        raise ValueError("datetime must be timezone-aware")
+    dt_utc = dt.astimezone(timezone.utc)
+    return dt_utc.strftime("%Y-%m-%dT%H:%M:%S") + f".{dt_utc.microsecond:06d}0+00:00"
 
 
 def _write_field(buffer: bytearray, value: str) -> None:
@@ -37,35 +57,29 @@ def _write_field(buffer: bytearray, value: str) -> None:
 
 def build_canonical_payload(
     *,
-    request_uuid: str,
     device_uuid: str,
+    request_uuid: str,
     sha256: str,
-    action: str,
-    issued_at: datetime,
     expires_at: datetime,
     nonce: str,
 ) -> bytes:
     """
-    Builds the exact byte sequence that gets Ed25519-signed for an approval:
-    schema_version(1 byte) + 7 length-prefixed (2-byte big-endian) UTF-8 fields, in this order:
-    request_uuid, device_uuid, sha256 (lowercase hex text), action, issued_at, expires_at, nonce.
+    Builds the exact byte sequence that gets Ed25519-signed for an approval, matching the .NET
+    agent's ElevateGate.Core.Crypto.CanonicalApprovalPayload.Build byte-for-byte:
+    schema_version(1 byte) + 5 length-prefixed (2-byte big-endian) UTF-8 fields, in this order:
+    device_uuid, request_uuid, sha256 (lowercase hex text), expires_at (.NET "O" round-trip
+    format via format_dotnet_round_trip), nonce.
 
     Length-prefixing (rather than delimiting) means no field's content can ever be crafted to
-    shift where one field ends and the next begins. See docs/API_CONTRACT.md.
-
-    NOTE: this is a distinct, incompatible byte layout from the one already implemented in the
-    existing .NET agent (ElevateGate.Core.Crypto.CanonicalApprovalPayload has 5 fields - no
-    `action`, no `issued_at` - and a different timestamp format). That agent was built against an
-    earlier placeholder contract; this backend was specified with an explicit 7-field payload.
-    Reconciling the two is a follow-up task on the agent side - see docs/API_CONTRACT.md.
+    shift where one field ends and the next begins. This is the single, unified contract - see
+    docs/API_CONTRACT.md - verified byte-for-byte against the real .NET agent (see the
+    known-vector regression test in tests/unit/test_signing.py).
     """
     buffer = bytearray([SCHEMA_VERSION])
-    _write_field(buffer, request_uuid)
     _write_field(buffer, device_uuid)
+    _write_field(buffer, request_uuid)
     _write_field(buffer, sha256.lower())
-    _write_field(buffer, action)
-    _write_field(buffer, format_utc_iso(issued_at))
-    _write_field(buffer, format_utc_iso(expires_at))
+    _write_field(buffer, format_dotnet_round_trip(expires_at))
     _write_field(buffer, nonce)
     return bytes(buffer)
 

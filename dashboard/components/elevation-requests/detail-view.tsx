@@ -81,7 +81,7 @@ export function ElevationRequestDetail({ id }: { id: number }) {
           </CardHeader>
           <CardContent className="space-y-6">
             <dl>
-              <DetailRow label="User" value={data.username} />
+              <DetailRow label="User" value={data.username ?? "Unknown (submitted by agent)"} />
               <DetailRow label="Device" value={data.device_uuid} mono />
               <DetailRow label="Hostname" value={data.device_hostname} />
               <DetailRow label="Application filename" value={data.filename} />

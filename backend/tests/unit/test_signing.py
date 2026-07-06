@@ -5,7 +5,7 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 from cryptography.exceptions import InvalidSignature
 
-from app.core.signing import build_canonical_payload, format_utc_iso
+from app.core.signing import build_canonical_payload, format_dotnet_round_trip, format_utc_iso
 
 
 def test_format_utc_iso_uses_z_suffix_and_microsecond_precision():
@@ -23,30 +23,41 @@ def test_format_utc_iso_rejects_naive_datetime():
         format_utc_iso(datetime(2026, 7, 6, 12, 35, 0))
 
 
+def test_format_dotnet_round_trip_matches_known_dotnet_output():
+    """Empirically verified against a live .NET probe: DateTimeOffset(...).ToString("O") for a
+    UTC instant with 123456 microseconds is "2026-07-06T13:07:11.1234560+00:00" - 7 fractional
+    digits (a trailing zero appended to Python's 6) and a numeric "+00:00" offset, never "Z"."""
+    dt = datetime(2026, 7, 6, 13, 7, 11, 123456, tzinfo=timezone.utc)
+    assert format_dotnet_round_trip(dt) == "2026-07-06T13:07:11.1234560+00:00"
+
+
+def test_format_dotnet_round_trip_converts_non_utc_to_utc():
+    dt = datetime(2026, 7, 6, 17, 7, 11, 123456, tzinfo=timezone(timedelta(hours=4)))
+    assert format_dotnet_round_trip(dt) == "2026-07-06T13:07:11.1234560+00:00"
+
+
 def test_canonical_payload_is_deterministic():
-    issued = datetime(2026, 7, 6, 12, 30, 0, tzinfo=timezone.utc)
-    expires = issued + timedelta(minutes=5)
+    expires = datetime(2026, 7, 6, 12, 35, 0, tzinfo=timezone.utc)
     a = build_canonical_payload(
-        request_uuid="req-1", device_uuid="dev-1", sha256="ab" * 32,
-        action="execute", issued_at=issued, expires_at=expires, nonce="nonce-1",
+        device_uuid="dev-1", request_uuid="req-1", sha256="ab" * 32,
+        expires_at=expires, nonce="nonce-1",
     )
     b = build_canonical_payload(
-        request_uuid="req-1", device_uuid="dev-1", sha256="ab" * 32,
-        action="execute", issued_at=issued, expires_at=expires, nonce="nonce-1",
+        device_uuid="dev-1", request_uuid="req-1", sha256="ab" * 32,
+        expires_at=expires, nonce="nonce-1",
     )
     assert a == b
 
 
 @pytest.mark.parametrize(
     "override",
-    ["request_uuid", "device_uuid", "sha256", "action", "nonce"],
+    ["device_uuid", "request_uuid", "sha256", "nonce"],
 )
 def test_canonical_payload_changes_when_any_field_changes(override):
-    issued = datetime(2026, 7, 6, 12, 30, 0, tzinfo=timezone.utc)
-    expires = issued + timedelta(minutes=5)
+    expires = datetime(2026, 7, 6, 12, 35, 0, tzinfo=timezone.utc)
     base_kwargs = dict(
-        request_uuid="req-1", device_uuid="dev-1", sha256="ab" * 32,
-        action="execute", issued_at=issued, expires_at=expires, nonce="nonce-1",
+        device_uuid="dev-1", request_uuid="req-1", sha256="ab" * 32,
+        expires_at=expires, nonce="nonce-1",
     )
     baseline = build_canonical_payload(**base_kwargs)
 
@@ -59,26 +70,24 @@ def test_canonical_payload_changes_when_any_field_changes(override):
 
 def test_canonical_payload_field_boundaries_cannot_be_shifted():
     # Without length-prefixing, "ab"+"cd" and "a"+"bcd" would concatenate identically.
-    issued = datetime(2026, 7, 6, 12, 30, 0, tzinfo=timezone.utc)
-    expires = issued + timedelta(minutes=5)
+    expires = datetime(2026, 7, 6, 12, 35, 0, tzinfo=timezone.utc)
     a = build_canonical_payload(
-        request_uuid="ab", device_uuid="cd", sha256="ab" * 32,
-        action="execute", issued_at=issued, expires_at=expires, nonce="nonce-1",
+        device_uuid="ab", request_uuid="cd", sha256="ab" * 32,
+        expires_at=expires, nonce="nonce-1",
     )
     b = build_canonical_payload(
-        request_uuid="a", device_uuid="bcd", sha256="ab" * 32,
-        action="execute", issued_at=issued, expires_at=expires, nonce="nonce-1",
+        device_uuid="a", request_uuid="bcd", sha256="ab" * 32,
+        expires_at=expires, nonce="nonce-1",
     )
     assert a != b
 
 
 def test_sign_and_verify_round_trip():
     private_key = Ed25519PrivateKey.generate()
-    issued = datetime.now(timezone.utc)
-    expires = issued + timedelta(minutes=5)
+    expires = datetime.now(timezone.utc) + timedelta(minutes=5)
     payload = build_canonical_payload(
-        request_uuid="req-1", device_uuid="dev-1", sha256="ab" * 32,
-        action="execute", issued_at=issued, expires_at=expires, nonce="nonce-1",
+        device_uuid="dev-1", request_uuid="req-1", sha256="ab" * 32,
+        expires_at=expires, nonce="nonce-1",
     )
 
     signature = private_key.sign(payload)
@@ -89,17 +98,16 @@ def test_sign_and_verify_round_trip():
 
 def test_tampered_payload_fails_verification():
     private_key = Ed25519PrivateKey.generate()
-    issued = datetime.now(timezone.utc)
-    expires = issued + timedelta(minutes=5)
+    expires = datetime.now(timezone.utc) + timedelta(minutes=5)
     payload = build_canonical_payload(
-        request_uuid="req-1", device_uuid="dev-1", sha256="ab" * 32,
-        action="execute", issued_at=issued, expires_at=expires, nonce="nonce-1",
+        device_uuid="dev-1", request_uuid="req-1", sha256="ab" * 32,
+        expires_at=expires, nonce="nonce-1",
     )
     signature = private_key.sign(payload)
 
     tampered_payload = build_canonical_payload(
-        request_uuid="req-1", device_uuid="dev-1", sha256="cd" * 32,
-        action="execute", issued_at=issued, expires_at=expires, nonce="nonce-1",
+        device_uuid="dev-1", request_uuid="req-1", sha256="cd" * 32,
+        expires_at=expires, nonce="nonce-1",
     )
 
     with pytest.raises(InvalidSignature):
@@ -109,12 +117,13 @@ def test_tampered_payload_fails_verification():
 def test_ed25519_cross_library_interop_known_vector():
     """
     This exact (public key, message, signature) triple was empirically produced and verified
-    during design of this backend: signed with Python's `cryptography` library, then verified
-    successfully against the *actual* .NET agent's Ed25519Verifier (BouncyCastle-backed) in
-    ElevateGate.Core. It's re-verified here with Python's own Ed25519PublicKey.verify() as a
-    permanent regression guard that Ed25519 signing/verification in this codebase still behaves
-    per RFC 8032 (the message bytes here are illustrative, not this backend's actual 7-field
-    payload format - see build_canonical_payload for that).
+    during reconciliation of this backend's contract with the real .NET agent: signed with
+    Python's `cryptography` library, then verified successfully against the *actual* .NET agent's
+    Ed25519Verifier (BouncyCastle-backed) in ElevateGate.Core. The message bytes below decode to
+    exactly the 5 fields build_canonical_payload produces - device_uuid="device-abc",
+    request_uuid="request-xyz", a sha256 hex string, expires_at in .NET "O" round-trip format
+    ("2026-07-06T12:35:00.1230000+00:00"), and nonce="nonce-123" - confirming this module's byte
+    layout is what the shipped agent binary actually verifies, not just what its source implies.
     """
     public_key_b64 = "tBRKExqE9S1JWa18vwBsYlnhIgjmKszgpJK1Y8k1ALY="
     signature_b64 = "wHjbfYbA63Qi8ZO/NHzJQqFKOWh3V44Jhl3jkzjJDMtoBf4WWkVCuqZIdE8VEgOuBf1R9aut2tw9lSzu5mYuDA=="
@@ -133,3 +142,13 @@ def test_ed25519_cross_library_interop_known_vector():
     message = bytes.fromhex(message_hex)
 
     public_key.verify(signature, message)  # does not raise => interop confirmed
+
+    # And: this backend's own builder reproduces that exact message, field-for-field.
+    rebuilt = build_canonical_payload(
+        device_uuid="device-abc",
+        request_uuid="request-xyz",
+        sha256="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        expires_at=datetime(2026, 7, 6, 12, 35, 0, 123000, tzinfo=timezone.utc),
+        nonce="nonce-123",
+    )
+    assert rebuilt == message

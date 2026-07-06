@@ -148,11 +148,9 @@ async def approve_elevation_request(
     nonce = secrets.token_urlsafe(24)
 
     payload = build_canonical_payload(
-        request_uuid=str(updated.request_uuid),
         device_uuid=str(device.device_uuid),
+        request_uuid=str(updated.request_uuid),
         sha256=updated.sha256,
-        action="execute",
-        issued_at=issued_at,
         expires_at=expires_at,
         nonce=nonce,
     )

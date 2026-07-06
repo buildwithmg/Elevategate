@@ -24,7 +24,9 @@ class ElevationRequest(Base):
     # Eagerly (joined) loaded - the dashboard shows device_uuid/hostname alongside every
     # elevation request (table + detail view), so this is effectively always needed.
     device: Mapped["Device"] = relationship(lazy="joined")
-    username: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Nullable: the .NET agent's ApprovalRequest never captures the local Windows username (see
+    # docs/API_CONTRACT.md) - a request submitted via the agent-compatible route genuinely has none.
+    username: Mapped[str | None] = mapped_column(String(255), nullable=True)
     filename: Mapped[str] = mapped_column(String(500), nullable=False)
     canonical_path: Mapped[str] = mapped_column(Text, nullable=False)
     sha256: Mapped[str] = mapped_column(String(64), nullable=False, index=True)

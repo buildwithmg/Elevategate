@@ -12,7 +12,7 @@ async def create(
     session: AsyncSession,
     *,
     device_id: int,
-    username: str,
+    username: str | None,
     filename: str,
     canonical_path: str,
     sha256: str,
@@ -22,9 +22,17 @@ async def create(
     file_version: str | None,
     reason: str,
     expires_at: datetime,
+    request_uuid: uuid.UUID | None = None,
 ) -> ElevationRequest:
+    """
+    `request_uuid` is normally server-generated, but the agent-compatible submit route
+    (POST /api/v1/requests) must accept the caller's own id: the .NET agent generates its own
+    RequestId locally and never reads it back from the submit response (it ignores the response
+    body entirely - see HttpApprovalApiClient.SubmitRequestAsync), so whatever id it used to
+    submit is the only id it will ever recognize in a later decisions poll or approval token.
+    """
     elevation_request = ElevationRequest(
-        request_uuid=uuid.uuid4(),
+        request_uuid=request_uuid or uuid.uuid4(),
         device_id=device_id,
         username=username,
         filename=filename,

@@ -73,7 +73,7 @@ export function RecentRequests() {
                     <TableCell>
                       <StatusBadge status={item.status} />
                     </TableCell>
-                    <TableCell>{item.username}</TableCell>
+                    <TableCell>{item.username ?? "—"}</TableCell>
                     <TableCell>{item.filename}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {new Date(item.requested_at).toLocaleString()}

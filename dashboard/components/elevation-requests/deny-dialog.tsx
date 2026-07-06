@@ -50,7 +50,7 @@ export function DenyDialog({ request }: { request: ElevationRequest }) {
         <DialogHeader>
           <DialogTitle>Confirm Denial</DialogTitle>
           <DialogDescription>
-            {request.username} will not be able to run {request.filename} on{" "}
+            {request.username ?? "This user"} will not be able to run {request.filename} on{" "}
             {request.device_hostname} with this request.
           </DialogDescription>
         </DialogHeader>

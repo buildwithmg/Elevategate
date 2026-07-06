@@ -60,8 +60,9 @@ list in this version (noted as a residual limitation below).
 ### T4 — Forged or tampered approval
 
 Mitigation: every approval is Ed25519-signed over a length-prefixed canonical byte layout (see
-API_CONTRACT.md) that binds device_uuid, request_uuid, sha256, action, issued_at, expires_at, and
-nonce together. The private key never touches the database and is never logged. Tampering with
+API_CONTRACT.md) that binds device_uuid, request_uuid, sha256, expires_at, and nonce together —
+byte-for-byte the same layout the real .NET agent verifies. The private key never touches the
+database and is never logged. Tampering with
 any field invalidates the signature (unit-tested, including a field-boundary-shift test proving
 length-prefixing — not delimiting — is what's actually preventing ambiguity).
 
