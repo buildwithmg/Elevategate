@@ -63,6 +63,11 @@ builder.Services.AddHttpClient<IApprovalApiClient, HttpApprovalApiClient>(client
 {
     client.BaseAddress = new Uri(serviceOptions.BackendBaseUrl);
     client.Timeout = TimeSpan.FromSeconds(30);
+    // Gates the backend's enroll endpoint. Deliberately attached here, on the transport, rather
+    // than added as a field on EnrollmentRequest - the wire contract HttpApprovalApiClient
+    // implements is untouched, this is purely an HTTP-layer default header.
+    if (!string.IsNullOrWhiteSpace(serviceOptions.EnrollmentKey))
+        client.DefaultRequestHeaders.Add("X-Enrollment-Key", serviceOptions.EnrollmentKey);
 });
 
 builder.Services.AddSingleton<IDeviceCredentialStore, DeviceCredentialStore>();

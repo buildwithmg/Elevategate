@@ -20,10 +20,16 @@
 .PARAMETER ServerPublicKeyBase64
     Base64-encoded Ed25519 public key issued by the backend team. This is pinned into local
     config, never fetched over the network — see docs/THREAT_MODEL.md.
+
+.PARAMETER EnrollmentKey
+    Pre-shared secret the backend requires (as an X-Enrollment-Key header) to accept a new
+    device's enrollment. Sent as a default header on every backend API call - see
+    docs/API_CONTRACT.md.
 #>
 param(
     [Parameter(Mandatory = $true)][string]$BackendBaseUrl,
     [Parameter(Mandatory = $true)][string]$ServerPublicKeyBase64,
+    [Parameter(Mandatory = $true)][string]$EnrollmentKey,
     [string]$InstallDir = "$env:ProgramFiles\ElevateGate",
     [string]$ServiceName = "ElevateGateAgent"
 )
@@ -46,6 +52,7 @@ $settingsPath = Join-Path $InstallDir "appsettings.json"
 $settings = Get-Content $settingsPath -Raw | ConvertFrom-Json
 $settings.ElevateGate.BackendBaseUrl = $BackendBaseUrl
 $settings.ElevateGate.ServerPublicKeyBase64 = $ServerPublicKeyBase64
+$settings.ElevateGate.EnrollmentKey = $EnrollmentKey
 $settings.ElevateGate.DataDirectory = "$env:ProgramData\ElevateGate"
 $settings.ElevateGate.ExpectedTrayExecutablePath = (Join-Path $InstallDir "ElevateGate.Tray.exe")
 $settings | ConvertTo-Json -Depth 10 | Set-Content $settingsPath

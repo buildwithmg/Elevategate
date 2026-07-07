@@ -10,6 +10,16 @@ public sealed class ElevateGateServiceOptions
     /// <summary>Base64-encoded Ed25519 public key, pinned at deployment time — never fetched at runtime.</summary>
     public string ServerPublicKeyBase64 { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Pre-shared secret sent as the X-Enrollment-Key header on every enrollment call, gating the
+    /// backend's otherwise-unauthenticated self-enrollment endpoint. Not part of any model the
+    /// backend contract defines (EnrollmentRequest has no such field) - it's attached as a default
+    /// header on the shared HttpClient in Program.cs, entirely outside of HttpApprovalApiClient's
+    /// own wire-contract logic. Empty means no header is sent (only appropriate against a backend
+    /// that doesn't require one).
+    /// </summary>
+    public string EnrollmentKey { get; set; } = string.Empty;
+
     /// <summary>How often to poll the backend for outstanding decisions.</summary>
     public int PollingIntervalSeconds { get; set; } = 15;
 

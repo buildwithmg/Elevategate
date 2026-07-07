@@ -16,8 +16,9 @@ From an elevated PowerShell prompt, from the repo root:
 
 ```powershell
 .\tools\install\Install-ElevateGate.ps1 `
-    -BackendBaseUrl "https://elevategate.keystoneuae.com/" `
-    -ServerPublicKeyBase64 "<base64 Ed25519 public key from the backend team>"
+    -BackendBaseUrl "https://elevategate.keystone.ae/" `
+    -ServerPublicKeyBase64 "<base64 Ed25519 public key from the backend team>" `
+    -EnrollmentKey "<pre-shared enrollment key from the backend team>"
 ```
 
 This will:
@@ -59,6 +60,7 @@ credential) instead of deleting it.
 |---|---|
 | `BackendBaseUrl` | Base URL of the backend API |
 | `ServerPublicKeyBase64` | Pinned Ed25519 public key used to verify every approval token |
+| `EnrollmentKey` | Sent as `X-Enrollment-Key` on every backend call — gates enrollment |
 | `PollingIntervalSeconds` | How often the service polls the backend for decisions (default 15) |
 | `DataDirectory` | Where local state lives (default `%ProgramData%\ElevateGate`) |
 | `PipeName` | Named pipe the tray connects to (default `ElevateGate.Agent`) |
