@@ -74,6 +74,16 @@ Write-Host "Registering Explorer context menu..."
 $contextMenuScript = Join-Path $PSScriptRoot "Register-ContextMenu.ps1"
 & $contextMenuScript -InstallDir $InstallDir
 
+Write-Host "Registering ElevateGate Tray to start at login (all users)..."
+$installedTrayExe = Join-Path $InstallDir "ElevateGate.Tray.exe"
+$runKeyPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
+Set-ItemProperty -Path $runKeyPath -Name "ElevateGateTray" -Value "`"$installedTrayExe`""
+
+# Also launch it right now, in the current interactive session, so the icon shows up immediately
+# instead of only after the next login.
+Write-Host "Starting ElevateGate Tray..."
+Start-Process -FilePath $installedTrayExe
+
 Write-Host ""
 Write-Host "ElevateGate Agent installed to $InstallDir."
 Write-Host "Local state (audit log, nonce ledger, device credential): $env:ProgramData\ElevateGate"

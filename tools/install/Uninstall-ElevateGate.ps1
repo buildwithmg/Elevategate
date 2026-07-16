@@ -26,6 +26,10 @@ if ($service) {
 Write-Host "Removing Explorer context menu..."
 & (Join-Path $PSScriptRoot "..\shell-integration\Unregister-ContextMenu.ps1")
 
+Write-Host "Removing ElevateGate Tray login entry and stopping any running instance..."
+Remove-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" -Name "ElevateGateTray" -ErrorAction SilentlyContinue
+Get-Process -Name "ElevateGate.Tray" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+
 if (Test-Path $InstallDir) {
     Write-Host "Removing install directory $InstallDir..."
     Remove-Item -Path $InstallDir -Recurse -Force

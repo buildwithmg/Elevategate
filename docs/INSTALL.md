@@ -30,6 +30,8 @@ What it does:
 3. Fills in the enrollment key in `appsettings.json` (backend URL and public key are already set).
 4. Registers and starts the `ElevateGateAgent` Windows Service (Local System, automatic start).
 5. Registers the "Request IT Approval" Explorer context-menu verb for `.exe` and `.msi` files.
+6. Registers `ElevateGate.Tray.exe` to launch at login for any user (`HKLM\...\CurrentVersion\Run`)
+   and starts it immediately in the current session, so the tray icon appears right away.
 
 ## Install from source (for development)
 
@@ -54,8 +56,11 @@ Optional parameters on either script: `-InstallDir` (default `%ProgramFiles%\Ele
   bearer token), `nonces.db`, `audit.db`, and `logs\elevategate-*.log`.
 - Right-click any `.exe` or `.msi` file in Explorer — "Request IT Approval" should appear and
   launch the tray with that file pre-selected.
-- The tray also runs standalone (Start Menu / a scheduled task / a login script, depending on how
-  you choose to launch it for the logged-in user) and shows a shield icon in the system tray.
+- The tray icon should already be visible in the system tray immediately after install (it's
+  started right away, and registered to auto-start at login for any user from then on — see
+  `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\ElevateGateTray`). Only one instance ever
+  runs per user session — a second launch (e.g. via the context-menu verb) hands off to the
+  already-running icon instead of spawning a duplicate.
 
 ## Uninstall
 
