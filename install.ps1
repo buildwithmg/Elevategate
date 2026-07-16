@@ -59,7 +59,12 @@ Expand-Archive -Path $zipPath -DestinationPath $extractDir -Force
 $installScript = Join-Path $extractDir "Install-FromRelease.ps1"
 if (-not (Test-Path $installScript)) { throw "Install-FromRelease.ps1 not found in the release package." }
 
-& $installScript -EnrollmentKey $enrollmentKey
+# Run in a child process with the policy bypassed just for this invocation - most machines default
+# to a Restricted/AllSigned execution policy that blocks loading a .ps1 *file* from disk (unlike
+# the `irm | iex` above, which evaluates a string and isn't subject to that same restriction).
+# This does not change the machine's execution policy at all, only this one process.
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installScript -EnrollmentKey $enrollmentKey
+if ($LASTEXITCODE -ne 0) { throw "Install-FromRelease.ps1 failed (exit code $LASTEXITCODE)." }
 
 Write-Host ""
 Write-Host "Done. Cleaning up..."
