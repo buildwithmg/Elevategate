@@ -80,11 +80,19 @@ export const DeviceSchema = z.object({
   device_uuid: z.string(),
   hostname: z.string(),
   operating_system: z.string(),
-  agent_version: z.string(),
+  agent_version: z.string().nullable(),
   last_seen: z.string().nullable(),
   enrollment_status: EnrollmentStatusSchema,
   online: z.boolean(),
   created_at: z.string(),
+  group_id: z.number().nullable(),
+  group_name: z.string().nullable(),
+  disk_total_bytes: z.number().nullable(),
+  disk_free_bytes: z.number().nullable(),
+  ram_total_bytes: z.number().nullable(),
+  ram_used_bytes: z.number().nullable(),
+  last_telemetry_at: z.string().nullable(),
+  update_requested: z.boolean(),
 });
 export type Device = z.infer<typeof DeviceSchema>;
 
@@ -93,6 +101,67 @@ export const DeviceListSchema = z.object({
   total: z.number(),
 });
 export type DeviceList = z.infer<typeof DeviceListSchema>;
+
+export const DeviceGroupSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  description: z.string().nullable(),
+  device_count: z.number(),
+  created_at: z.string(),
+});
+export type DeviceGroup = z.infer<typeof DeviceGroupSchema>;
+
+export const DeviceGroupListSchema = z.object({
+  items: z.array(DeviceGroupSchema),
+  total: z.number(),
+});
+export type DeviceGroupList = z.infer<typeof DeviceGroupListSchema>;
+
+export const AppAllowlistEntrySchema = z.object({
+  id: z.number(),
+  group_id: z.number().nullable(),
+  group_name: z.string().nullable(),
+  publisher: z.string(),
+  filename: z.string(),
+  description: z.string().nullable(),
+  created_by: z.number().nullable(),
+  created_at: z.string(),
+});
+export type AppAllowlistEntry = z.infer<typeof AppAllowlistEntrySchema>;
+
+export const AppAllowlistEntryListSchema = z.object({
+  items: z.array(AppAllowlistEntrySchema),
+  total: z.number(),
+});
+export type AppAllowlistEntryList = z.infer<typeof AppAllowlistEntryListSchema>;
+
+export const AlertSeveritySchema = z.enum(["critical", "warning"]);
+export type AlertSeverity = z.infer<typeof AlertSeveritySchema>;
+
+export const AlertTypeSchema = z.enum(["low_disk_space", "high_ram_usage", "device_offline"]);
+export type AlertType = z.infer<typeof AlertTypeSchema>;
+
+export const AlertSchema = z.object({
+  severity: AlertSeveritySchema,
+  type: AlertTypeSchema,
+  device_id: z.number(),
+  device_uuid: z.string(),
+  hostname: z.string(),
+  message: z.string(),
+});
+export type Alert = z.infer<typeof AlertSchema>;
+
+export const AlertListSchema = z.object({
+  items: z.array(AlertSchema),
+  total: z.number(),
+});
+export type AlertList = z.infer<typeof AlertListSchema>;
+
+export const EnrollmentInfoSchema = z.object({
+  enrollment_key: z.string(),
+  install_command: z.string(),
+});
+export type EnrollmentInfo = z.infer<typeof EnrollmentInfoSchema>;
 
 export const ActorTypeSchema = z.enum(["admin", "device", "system"]);
 export type ActorType = z.infer<typeof ActorTypeSchema>;

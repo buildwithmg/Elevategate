@@ -1,3 +1,4 @@
+import { AlertsBanner } from "@/components/dashboard/alerts-banner";
 import { RecentRequests } from "@/components/dashboard/recent-requests";
 import { SummaryCards } from "@/components/dashboard/summary-cards";
 
@@ -10,6 +11,7 @@ export default function DashboardPage() {
           Overview of elevation requests and enrolled devices.
         </p>
       </div>
+      <AlertsBanner />
       <SummaryCards />
       <RecentRequests />
     </div>

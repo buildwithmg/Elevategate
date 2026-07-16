@@ -2,11 +2,13 @@
 
 import {
   LayoutDashboard,
+  ListChecks,
   ScrollText,
   Server,
   Settings,
   ShieldAlert,
   ShieldCheck,
+  Users,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -19,6 +21,8 @@ const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/elevation-requests", label: "Elevation Requests", icon: ShieldAlert },
   { href: "/devices", label: "Devices", icon: Server },
+  { href: "/device-groups", label: "Device Groups", icon: Users },
+  { href: "/app-allowlist", label: "App Allowlist", icon: ListChecks },
   { href: "/audit-logs", label: "Audit Logs", icon: ScrollText },
   { href: "/settings", label: "Settings", icon: Settings },
 ] as const;

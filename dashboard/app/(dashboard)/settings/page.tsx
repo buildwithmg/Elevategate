@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/shared/state-views";
+import { EnrollmentCard } from "@/components/settings/enrollment-card";
 import { getMe, logout } from "@/lib/api-client";
 
 export default function SettingsPage() {
@@ -73,6 +74,8 @@ export default function SettingsPage() {
           </Button>
         </CardContent>
       </Card>
+
+      {data?.role === "admin" && <EnrollmentCard />}
     </div>
   );
 }

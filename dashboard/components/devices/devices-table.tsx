@@ -13,8 +13,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState, ErrorState } from "@/components/shared/state-views";
+import { DeviceGroupSelect } from "@/components/devices/device-group-select";
+import { UpdateNowButton } from "@/components/devices/update-now-button";
 import { listDevices } from "@/lib/api-client";
-import { cn } from "@/lib/utils";
+import type { Device } from "@/lib/schemas";
+import { cn, formatBytesGB, formatUsagePercent } from "@/lib/utils";
 
 function OnlineBadge({ online }: { online: boolean }) {
   return (
@@ -42,6 +45,33 @@ function EnrollmentBadge({ status }: { status: "active" | "revoked" }) {
     >
       {status === "active" ? "Active" : "Revoked"}
     </Badge>
+  );
+}
+
+function DiskCell({ device }: { device: Device }) {
+  if (device.disk_total_bytes === null || device.disk_free_bytes === null) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+  const used = device.disk_total_bytes - device.disk_free_bytes;
+  const usedPct = formatUsagePercent(used, device.disk_total_bytes);
+  const isLow = device.disk_total_bytes > 0 && device.disk_free_bytes / device.disk_total_bytes < 0.1;
+  return (
+    <span className={cn("text-sm", isLow && "font-medium text-red-600 dark:text-red-400")}>
+      {formatBytesGB(device.disk_free_bytes)} free of {formatBytesGB(device.disk_total_bytes)} ({usedPct} used)
+    </span>
+  );
+}
+
+function RamCell({ device }: { device: Device }) {
+  if (device.ram_total_bytes === null || device.ram_used_bytes === null) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+  const usedPct = formatUsagePercent(device.ram_used_bytes, device.ram_total_bytes);
+  const isHigh = device.ram_used_bytes / device.ram_total_bytes > 0.9;
+  return (
+    <span className={cn("text-sm", isHigh && "font-medium text-amber-600 dark:text-amber-400")}>
+      {usedPct} of {formatBytesGB(device.ram_total_bytes)}
+    </span>
   );
 }
 
@@ -88,9 +118,13 @@ export function DevicesTable() {
           <TableHead>Device UUID</TableHead>
           <TableHead>Operating System</TableHead>
           <TableHead>Agent Version</TableHead>
+          <TableHead>Group</TableHead>
+          <TableHead>Disk</TableHead>
+          <TableHead>RAM</TableHead>
           <TableHead>Last Seen</TableHead>
           <TableHead>Status</TableHead>
           <TableHead>Enrollment</TableHead>
+          <TableHead>Update</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -101,7 +135,16 @@ export function DevicesTable() {
               {device.device_uuid}
             </TableCell>
             <TableCell>{device.operating_system}</TableCell>
-            <TableCell>{device.agent_version}</TableCell>
+            <TableCell>{device.agent_version ?? "—"}</TableCell>
+            <TableCell>
+              <DeviceGroupSelect deviceId={device.id} groupId={device.group_id} />
+            </TableCell>
+            <TableCell>
+              <DiskCell device={device} />
+            </TableCell>
+            <TableCell>
+              <RamCell device={device} />
+            </TableCell>
             <TableCell className="text-muted-foreground">
               {device.last_seen ? new Date(device.last_seen).toLocaleString() : "Never"}
             </TableCell>
@@ -110,6 +153,9 @@ export function DevicesTable() {
             </TableCell>
             <TableCell>
               <EnrollmentBadge status={device.enrollment_status} />
+            </TableCell>
+            <TableCell>
+              <UpdateNowButton deviceId={device.id} updateRequested={device.update_requested} />
             </TableCell>
           </TableRow>
         ))}

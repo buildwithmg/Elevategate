@@ -61,3 +61,5 @@ async function forward(request: Request, { params }: RouteParams): Promise<NextR
 
 export const GET = forward;
 export const POST = forward;
+export const PATCH = forward;
+export const DELETE = forward;

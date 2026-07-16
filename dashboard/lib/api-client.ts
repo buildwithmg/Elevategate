@@ -1,19 +1,33 @@
 import {
+  AlertListSchema,
+  type AlertList,
+  AppAllowlistEntryListSchema,
+  AppAllowlistEntrySchema,
+  type AppAllowlistEntry,
+  type AppAllowlistEntryList,
   AuditLogListSchema,
   type AuditLogList,
   DashboardSummarySchema,
   type DashboardSummary,
+  DeviceGroupListSchema,
+  DeviceGroupSchema,
+  type DeviceGroup,
+  type DeviceGroupList,
   DeviceListSchema,
+  DeviceSchema,
+  type Device,
   type DeviceList,
   ElevationRequestListSchema,
   ElevationRequestSchema,
   type ElevationRequest,
   type ElevationRequestList,
+  EnrollmentInfoSchema,
+  type EnrollmentInfo,
   MeResponseSchema,
   type MeResponse,
   extractErrorMessage,
 } from "@/lib/schemas";
-import type { z } from "zod";
+import { z } from "zod";
 
 /** Thrown by every api-client function on a non-2xx response or a response that fails Zod validation. */
 export class ApiError extends Error {
@@ -106,6 +120,7 @@ export function denyElevationRequest(id: number, reason?: string): Promise<Eleva
 
 export type DeviceListParams = {
   enrollment_status?: string;
+  group_id?: number;
   limit?: number;
   offset?: number;
 };
@@ -113,10 +128,79 @@ export type DeviceListParams = {
 export function listDevices(params: DeviceListParams = {}): Promise<DeviceList> {
   const search = new URLSearchParams();
   if (params.enrollment_status) search.set("enrollment_status", params.enrollment_status);
+  if (params.group_id !== undefined) search.set("group_id", String(params.group_id));
   if (params.limit !== undefined) search.set("limit", String(params.limit));
   if (params.offset !== undefined) search.set("offset", String(params.offset));
   const query = search.toString();
   return request(`devices${query ? `?${query}` : ""}`, DeviceListSchema);
+}
+
+export function assignDeviceGroup(deviceId: number, groupId: number | null): Promise<Device> {
+  return request(`devices/${deviceId}/group`, DeviceSchema, {
+    method: "PATCH",
+    body: JSON.stringify({ group_id: groupId }),
+  });
+}
+
+export function requestDeviceUpdate(deviceId: number): Promise<Device> {
+  return request(`devices/${deviceId}/request-update`, DeviceSchema, { method: "POST" });
+}
+
+export function listDeviceGroups(): Promise<DeviceGroupList> {
+  return request("device-groups", DeviceGroupListSchema);
+}
+
+export function createDeviceGroup(name: string, description?: string): Promise<DeviceGroup> {
+  return request("device-groups", DeviceGroupSchema, {
+    method: "POST",
+    body: JSON.stringify({ name, description: description || undefined }),
+  });
+}
+
+export async function deleteDeviceGroup(groupId: number): Promise<void> {
+  await request(`device-groups/${groupId}`, z.unknown(), { method: "DELETE" });
+}
+
+export type AppAllowlistListParams = {
+  group_id?: number;
+};
+
+export function listAppAllowlistEntries(
+  params: AppAllowlistListParams = {},
+): Promise<AppAllowlistEntryList> {
+  const search = new URLSearchParams();
+  if (params.group_id !== undefined) search.set("group_id", String(params.group_id));
+  const query = search.toString();
+  return request(`app-allowlist${query ? `?${query}` : ""}`, AppAllowlistEntryListSchema);
+}
+
+export function createAppAllowlistEntry(input: {
+  publisher: string;
+  filename: string;
+  group_id?: number | null;
+  description?: string;
+}): Promise<AppAllowlistEntry> {
+  return request("app-allowlist", AppAllowlistEntrySchema, {
+    method: "POST",
+    body: JSON.stringify({
+      publisher: input.publisher,
+      filename: input.filename,
+      group_id: input.group_id ?? undefined,
+      description: input.description || undefined,
+    }),
+  });
+}
+
+export async function deleteAppAllowlistEntry(entryId: number): Promise<void> {
+  await request(`app-allowlist/${entryId}`, z.unknown(), { method: "DELETE" });
+}
+
+export function getDashboardAlerts(): Promise<AlertList> {
+  return request("dashboard/alerts", AlertListSchema);
+}
+
+export function getEnrollmentInfo(): Promise<EnrollmentInfo> {
+  return request("dashboard/enrollment-info", EnrollmentInfoSchema);
 }
 
 export type AuditLogListParams = {
