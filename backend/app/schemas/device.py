@@ -49,6 +49,16 @@ class DeviceRead(BaseModel):
     # device online" business rule lives in exactly one place.
     online: bool
     created_at: datetime
+    group_id: int | None
+    group_name: str | None
+    disk_total_bytes: int | None
+    disk_free_bytes: int | None
+    ram_total_bytes: int | None
+    ram_used_bytes: int | None
+    last_telemetry_at: datetime | None
+    # True iff an admin asked for an update and the agent hasn't yet reported back a newer
+    # agent_version since then - see POST /api/v1/devices/{id}/request-update.
+    update_requested: bool
 
     @classmethod
     def from_device(cls, device, *, online: bool) -> "DeviceRead":
@@ -62,6 +72,14 @@ class DeviceRead(BaseModel):
             enrollment_status=device.enrollment_status,
             online=online,
             created_at=device.created_at,
+            group_id=device.group_id,
+            group_name=device.group.name if device.group else None,
+            disk_total_bytes=device.disk_total_bytes,
+            disk_free_bytes=device.disk_free_bytes,
+            ram_total_bytes=device.ram_total_bytes,
+            ram_used_bytes=device.ram_used_bytes,
+            last_telemetry_at=device.last_telemetry_at,
+            update_requested=device.update_requested_at is not None,
         )
 
 

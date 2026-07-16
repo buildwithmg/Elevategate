@@ -1,12 +1,16 @@
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Enum, String, func
+from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, String, func
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 from app.models.enums import EnrollmentStatus
+
+if TYPE_CHECKING:
+    from app.models.device_group import DeviceGroup
 
 
 class Device(Base):
@@ -33,3 +37,21 @@ class Device(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+    group_id: Mapped[int | None] = mapped_column(ForeignKey("device_groups.id"), nullable=True, index=True)
+    group: Mapped["DeviceGroup | None"] = relationship(lazy="joined")
+
+    # System telemetry, reported by the agent's heartbeat (POST /api/v1/heartbeat) - all nullable
+    # since a device may never have sent one (e.g. an old agent build that predates this).
+    disk_total_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    disk_free_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    ram_total_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    ram_used_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    last_telemetry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Set by an admin via POST /api/v1/devices/{id}/request-update; the agent's next heartbeat
+    # response carries this back as `updateRequested: true` so it can check for/apply an update
+    # immediately instead of waiting for its own timer. Cleared once a heartbeat reports a
+    # different agent_version than update_requested_from_version - i.e. the update actually landed.
+    update_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    update_requested_from_version: Mapped[str | None] = mapped_column(String(50), nullable=True)

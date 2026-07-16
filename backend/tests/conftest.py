@@ -31,7 +31,10 @@ TEST_DATABASE_URL = os.environ["DATABASE_URL"]
 test_engine = create_async_engine(TEST_DATABASE_URL, pool_pre_ping=True)
 TestSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False, autoflush=False)
 
-_TABLES = "approvals, elevation_requests, devices, admin_users, audit_logs"
+_TABLES = (
+    "approvals, elevation_requests, app_allowlist_entries, devices, device_groups, "
+    "admin_users, audit_logs"
+)
 
 
 @pytest_asyncio.fixture(autouse=True)

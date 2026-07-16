@@ -123,3 +123,23 @@ class AgentApprovalDecision(AgentCamelModel):
     request_id: uuid.UUID
     status: ElevationRequestStatus
     token: AgentApprovalToken | None
+
+
+class AgentHeartbeatRequest(AgentCamelModel):
+    """POST /api/v1/heartbeat - not part of the agent's originally-shipped contract; added
+    alongside ElevateGate.Infrastructure.Api.HttpApprovalApiClient.SendHeartbeatAsync so the
+    dashboard can show live system telemetry and the agent's own running version per device."""
+
+    agent_version: str | None = Field(default=None, max_length=50)
+    disk_total_bytes: int | None = Field(default=None, ge=0)
+    disk_free_bytes: int | None = Field(default=None, ge=0)
+    ram_total_bytes: int | None = Field(default=None, ge=0)
+    ram_used_bytes: int | None = Field(default=None, ge=0)
+
+
+class AgentHeartbeatResponse(AgentCamelModel):
+    """`update_requested` mirrors Device.update_requested_at (set via an admin's POST
+    /api/v1/devices/{id}/request-update) - true tells the agent to check for/apply an update right
+    away instead of waiting for its own timer."""
+
+    update_requested: bool

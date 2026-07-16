@@ -15,19 +15,26 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_device_bearer, get_db, require_enrollment_key
 from app.config import get_settings
+from app.core.approvals import issue_approval
 from app.core.audit import write_audit_log
 from app.core.rate_limit import limiter
 from app.core.security import generate_device_secret, hash_secret
-from app.core.signing import build_canonical_payload, sign_payload
 from app.models.device import Device
-from app.models.enums import ActorType, ElevationRequestStatus
-from app.repositories import approval_repository, device_repository, elevation_request_repository
+from app.models.enums import ActorType, ElevationRequestStatus, SignatureStatus
+from app.repositories import (
+    app_allowlist_repository,
+    approval_repository,
+    device_repository,
+    elevation_request_repository,
+)
 from app.schemas.agent_wire import (
     AgentApprovalDecision,
     AgentApprovalRequest,
     AgentApprovalToken,
     AgentEnrollRequest,
     AgentEnrollResponse,
+    AgentHeartbeatRequest,
+    AgentHeartbeatResponse,
     to_internal_signature_status,
 )
 
@@ -131,8 +138,105 @@ async def agent_submit_request(
         metadata={"filename": elevation_request.filename, "sha256": elevation_request.sha256},
     )
 
+    await _try_auto_approve(session, elevation_request=elevation_request, device=device)
+
     await session.commit()
     return {"requestId": str(elevation_request.request_uuid)}
+
+
+async def _try_auto_approve(session: AsyncSession, *, elevation_request, device: Device) -> None:
+    """
+    Auto-approves a just-submitted request if it matches an app-allowlist entry scoped to this
+    device's group (or a global entry) - see AppAllowlistEntry and docs/API_CONTRACT.md. Matches
+    on (publisher, filename) rather than the exact sha256 the manual-approval flow implicitly
+    binds to, so an entry keeps working across the app's own updates; to keep that looser match
+    safe, it only ever applies when this specific submission's signature was independently
+    verified Trusted by the agent - an untrusted/unsigned/hash-mismatched file with the same
+    publisher/filename text always falls through to the ordinary human-review queue instead.
+    """
+    if elevation_request.signature_status != SignatureStatus.TRUSTED:
+        return
+    if elevation_request.publisher is None:
+        return
+
+    match = await app_allowlist_repository.find_match(
+        session,
+        device_group_id=device.group_id,
+        publisher=elevation_request.publisher,
+        filename=elevation_request.filename,
+    )
+    if match is None:
+        return
+
+    updated = await elevation_request_repository.transition_status(
+        session,
+        elevation_request_id=elevation_request.id,
+        expected_current_status=ElevationRequestStatus.PENDING,
+        new_status=ElevationRequestStatus.APPROVED,
+        reviewed_by=None,
+        reviewed_at=datetime.now(timezone.utc),
+    )
+    if updated is None:
+        return  # lost a race (implausible immediately after creation) - leave it pending
+
+    approval = await issue_approval(session, elevation_request=updated, device=device)
+
+    await write_audit_log(
+        session,
+        actor_type=ActorType.SYSTEM,
+        actor_id=f"app_allowlist_entry:{match.id}",
+        action="elevation_request.auto_approved",
+        target_type="elevation_request",
+        target_id=str(updated.id),
+        metadata={
+            "nonce": approval.nonce,
+            "matched_allowlist_entry_id": match.id,
+            "publisher": elevation_request.publisher,
+            "filename": elevation_request.filename,
+        },
+    )
+
+
+@router.post("/heartbeat", response_model=AgentHeartbeatResponse)
+@limiter.limit(lambda: get_settings().rate_limit_heartbeat)
+async def agent_heartbeat(
+    request: Request,
+    body: AgentHeartbeatRequest,
+    device: Device = Depends(get_current_device_bearer),
+    session: AsyncSession = Depends(get_db),
+) -> AgentHeartbeatResponse:
+    """
+    POST /api/v1/heartbeat - not part of the agent's originally-shipped contract (added alongside
+    HttpApprovalApiClient.SendHeartbeatAsync so the dashboard can show live disk/RAM telemetry and
+    the agent's own running version per device, and so an admin's "update now" request actually
+    reaches the device). Bearer device auth, same as /requests and /devices/{id}/decisions.
+    """
+    now = datetime.now(timezone.utc)
+    updated = await device_repository.record_heartbeat(
+        session,
+        device_id=device.id,
+        seen_at=now,
+        agent_version=body.agent_version,
+        disk_total_bytes=body.disk_total_bytes,
+        disk_free_bytes=body.disk_free_bytes,
+        ram_total_bytes=body.ram_total_bytes,
+        ram_used_bytes=body.ram_used_bytes,
+        telemetry_at=now,
+    )
+
+    update_requested = updated.update_requested_at is not None
+    if (
+        update_requested
+        and body.agent_version is not None
+        and body.agent_version != updated.update_requested_from_version
+    ):
+        # The requested update actually landed - this heartbeat is running a different version
+        # than the one recorded when the admin asked for an update.
+        await device_repository.clear_update_requested(session, device_id=device.id)
+        update_requested = False
+
+    await session.commit()
+    return AgentHeartbeatResponse(update_requested=update_requested)
 
 
 @router.get("/devices/{device_id}/decisions", response_model=list[AgentApprovalDecision])

@@ -5,7 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_secret
 from app.models.admin_user import AdminUser
+from app.models.app_allowlist_entry import AppAllowlistEntry
 from app.models.device import Device
+from app.models.device_group import DeviceGroup
 from app.models.elevation_request import ElevationRequest
 from app.models.enums import AdminRole, ElevationRequestStatus, EnrollmentStatus, SignatureStatus
 
@@ -19,6 +21,7 @@ async def create_device(
     agent_version: str = "1.0.0",
     secret: str = "test-device-secret",
     enrollment_status: EnrollmentStatus = EnrollmentStatus.ACTIVE,
+    group_id: int | None = None,
 ) -> tuple[Device, str]:
     device = Device(
         device_uuid=device_uuid or uuid.uuid4(),
@@ -27,11 +30,44 @@ async def create_device(
         agent_version=agent_version,
         device_secret_hash=hash_secret(secret),
         enrollment_status=enrollment_status,
+        group_id=group_id,
     )
     session.add(device)
     await session.commit()
     await session.refresh(device)
     return device, secret
+
+
+async def create_device_group(
+    session: AsyncSession, *, name: str = "Finance", description: str | None = None
+) -> DeviceGroup:
+    group = DeviceGroup(name=name, description=description)
+    session.add(group)
+    await session.commit()
+    await session.refresh(group)
+    return group
+
+
+async def create_app_allowlist_entry(
+    session: AsyncSession,
+    *,
+    group_id: int | None = None,
+    publisher: str = "Contoso Ltd.",
+    filename: str = "installer.exe",
+    description: str | None = None,
+    created_by: int | None = None,
+) -> AppAllowlistEntry:
+    entry = AppAllowlistEntry(
+        group_id=group_id,
+        publisher=publisher,
+        filename=filename,
+        description=description,
+        created_by=created_by,
+    )
+    session.add(entry)
+    await session.commit()
+    await session.refresh(entry)
+    return entry
 
 
 async def create_admin(

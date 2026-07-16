@@ -13,7 +13,13 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from app.core.security import create_access_token
 from app.core.signing import build_canonical_payload
-from tests.factories import create_admin, create_device, create_elevation_request
+from tests.factories import (
+    create_admin,
+    create_app_allowlist_entry,
+    create_device,
+    create_device_group,
+    create_elevation_request,
+)
 
 _ENROLLMENT_KEY = os.environ["ENROLLMENT_KEY"]
 _TEST_PRIVATE_KEY = Ed25519PrivateKey.from_private_bytes(
@@ -288,3 +294,207 @@ async def test_agent_decisions_denied_has_no_token(client, db_session):
     assert len(decisions) == 1
     assert decisions[0]["status"] == "denied"
     assert decisions[0]["token"] is None
+
+
+# --- Heartbeat / telemetry / remote update -----------------------------------------------------
+
+
+async def test_agent_heartbeat_records_telemetry_and_version(client, db_session):
+    device, secret = await create_device(db_session, agent_version="1.0.2")
+
+    response = await client.post(
+        "/api/v1/heartbeat",
+        headers=_device_bearer_header(device, secret),
+        json={
+            "agentVersion": "1.0.3",
+            "diskTotalBytes": 500_000_000_000,
+            "diskFreeBytes": 100_000_000_000,
+            "ramTotalBytes": 16_000_000_000,
+            "ramUsedBytes": 8_000_000_000,
+        },
+    )
+    assert response.status_code == 200
+    assert response.json() == {"updateRequested": False}
+
+    # device was loaded (and cached in the identity map) by this same session's own
+    # create_device() call above - refresh it to see the client's separate-session commit.
+    await db_session.refresh(device)
+    assert device.agent_version == "1.0.3"
+    assert device.disk_total_bytes == 500_000_000_000
+    assert device.disk_free_bytes == 100_000_000_000
+    assert device.ram_used_bytes == 8_000_000_000
+    assert device.last_telemetry_at is not None
+
+
+async def test_agent_heartbeat_requires_bearer_auth(client):
+    response = await client.post("/api/v1/heartbeat", json={"agentVersion": "1.0.3"})
+    assert response.status_code == 401
+
+
+async def test_request_update_then_heartbeat_reports_true_until_version_changes(client, db_session):
+    device, secret = await create_device(db_session, agent_version="1.0.2")
+    admin, _ = await create_admin(db_session)
+
+    response = await client.post(
+        f"/api/v1/devices/{device.id}/request-update", headers=_admin_auth_header(admin)
+    )
+    assert response.status_code == 200
+    assert response.json()["update_requested"] is True
+
+    # Still on the old version - the agent hasn't actually updated yet.
+    response = await client.post(
+        "/api/v1/heartbeat",
+        headers=_device_bearer_header(device, secret),
+        json={"agentVersion": "1.0.2"},
+    )
+    assert response.json() == {"updateRequested": True}
+
+    # Now it reports a different version - the update landed, so the flag clears.
+    response = await client.post(
+        "/api/v1/heartbeat",
+        headers=_device_bearer_header(device, secret),
+        json={"agentVersion": "1.0.3"},
+    )
+    assert response.json() == {"updateRequested": False}
+
+    response = await client.post(
+        "/api/v1/heartbeat",
+        headers=_device_bearer_header(device, secret),
+        json={"agentVersion": "1.0.3"},
+    )
+    assert response.json() == {"updateRequested": False}
+
+
+# --- Auto-approve via app allowlist -------------------------------------------------------------
+
+
+async def test_matching_global_allowlist_entry_auto_approves(client, db_session):
+    """The default _approval_request_body() submits publisher="Contoso Ltd.",
+    filename="installer.exe", trustStatus="trusted" - matches this global entry exactly."""
+    device, secret = await create_device(db_session)
+    await create_app_allowlist_entry(db_session, group_id=None, publisher="Contoso Ltd.", filename="installer.exe")
+    request_id = uuid.uuid4()
+
+    response = await client.post(
+        "/api/v1/requests",
+        headers=_device_bearer_header(device, secret),
+        json=_approval_request_body(request_id=request_id, device_id=device.device_uuid),
+    )
+    assert response.status_code == 201
+
+    from app.models.enums import ElevationRequestStatus
+    from app.repositories import elevation_request_repository
+
+    stored = await elevation_request_repository.get_by_uuid(db_session, request_id)
+    assert stored.status == ElevationRequestStatus.APPROVED
+
+    decisions_response = await client.get(
+        f"/api/v1/devices/{device.device_uuid}/decisions",
+        headers=_device_bearer_header(device, secret),
+    )
+    decisions = decisions_response.json()
+    assert len(decisions) == 1
+    assert decisions[0]["status"] == "approved"
+    assert decisions[0]["token"] is not None
+
+
+async def test_auto_approval_is_audit_logged(client, db_session):
+    device, secret = await create_device(db_session)
+    entry = await create_app_allowlist_entry(
+        db_session, group_id=None, publisher="Contoso Ltd.", filename="installer.exe"
+    )
+    admin, _ = await create_admin(db_session)
+
+    await client.post(
+        "/api/v1/requests",
+        headers=_device_bearer_header(device, secret),
+        json=_approval_request_body(request_id=uuid.uuid4(), device_id=device.device_uuid),
+    )
+
+    response = await client.get(
+        "/api/v1/audit-logs", params={"action": "elevation_request.auto_approved"}, headers=_admin_auth_header(admin)
+    )
+    items = response.json()["items"]
+    assert len(items) == 1
+    assert items[0]["metadata"]["matched_allowlist_entry_id"] == entry.id
+    assert items[0]["actor_type"] == "system"
+
+
+async def test_allowlist_entry_scoped_to_different_group_does_not_match(client, db_session):
+    device_group = await create_device_group(db_session, name="Engineering")
+    other_group = await create_device_group(db_session, name="Finance")
+    device, secret = await create_device(db_session, group_id=device_group.id)
+    await create_app_allowlist_entry(
+        db_session, group_id=other_group.id, publisher="Contoso Ltd.", filename="installer.exe"
+    )
+    request_id = uuid.uuid4()
+
+    await client.post(
+        "/api/v1/requests",
+        headers=_device_bearer_header(device, secret),
+        json=_approval_request_body(request_id=request_id, device_id=device.device_uuid),
+    )
+
+    from app.models.enums import ElevationRequestStatus
+    from app.repositories import elevation_request_repository
+
+    stored = await elevation_request_repository.get_by_uuid(db_session, request_id)
+    assert stored.status == ElevationRequestStatus.PENDING
+
+
+async def test_allowlist_entry_scoped_to_matching_group_does_match(client, db_session):
+    group = await create_device_group(db_session, name="Finance")
+    device, secret = await create_device(db_session, group_id=group.id)
+    await create_app_allowlist_entry(
+        db_session, group_id=group.id, publisher="Contoso Ltd.", filename="installer.exe"
+    )
+    request_id = uuid.uuid4()
+
+    await client.post(
+        "/api/v1/requests",
+        headers=_device_bearer_header(device, secret),
+        json=_approval_request_body(request_id=request_id, device_id=device.device_uuid),
+    )
+
+    from app.models.enums import ElevationRequestStatus
+    from app.repositories import elevation_request_repository
+
+    stored = await elevation_request_repository.get_by_uuid(db_session, request_id)
+    assert stored.status == ElevationRequestStatus.APPROVED
+
+
+async def test_untrusted_signature_never_auto_approves_even_with_matching_publisher_filename(client, db_session):
+    device, secret = await create_device(db_session)
+    await create_app_allowlist_entry(db_session, group_id=None, publisher="Contoso Ltd.", filename="installer.exe")
+    request_id = uuid.uuid4()
+
+    body = _approval_request_body(request_id=request_id, device_id=device.device_uuid)
+    body["signature"]["trustStatus"] = "untrusted"
+
+    await client.post(
+        "/api/v1/requests", headers=_device_bearer_header(device, secret), json=body
+    )
+
+    from app.models.enums import ElevationRequestStatus
+    from app.repositories import elevation_request_repository
+
+    stored = await elevation_request_repository.get_by_uuid(db_session, request_id)
+    assert stored.status == ElevationRequestStatus.PENDING
+
+
+async def test_no_matching_allowlist_entry_stays_pending(client, db_session):
+    device, secret = await create_device(db_session)
+    await create_app_allowlist_entry(db_session, group_id=None, publisher="Other Publisher", filename="other.exe")
+    request_id = uuid.uuid4()
+
+    await client.post(
+        "/api/v1/requests",
+        headers=_device_bearer_header(device, secret),
+        json=_approval_request_body(request_id=request_id, device_id=device.device_uuid),
+    )
+
+    from app.models.enums import ElevationRequestStatus
+    from app.repositories import elevation_request_repository
+
+    stored = await elevation_request_repository.get_by_uuid(db_session, request_id)
+    assert stored.status == ElevationRequestStatus.PENDING

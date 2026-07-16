@@ -1,4 +1,3 @@
-import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -6,13 +5,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_device, get_db, require_role
 from app.config import get_settings
+from app.core.approvals import issue_approval
 from app.core.audit import write_audit_log
 from app.core.rate_limit import limiter
-from app.core.signing import build_canonical_payload, sign_payload
 from app.models.admin_user import AdminUser
 from app.models.device import Device
 from app.models.enums import ActorType, ElevationRequestStatus
-from app.repositories import approval_repository, device_repository, elevation_request_repository
+from app.repositories import device_repository, elevation_request_repository
 from app.schemas.elevation_request import (
     DenyRequest,
     ElevationRequestCreate,
@@ -142,30 +141,7 @@ async def approve_elevation_request(
         )
 
     device = await device_repository.get_by_id(session, updated.device_id)
-    settings = get_settings()
-    issued_at = now
-    expires_at = issued_at + timedelta(seconds=settings.approval_ttl_seconds)
-    nonce = secrets.token_urlsafe(24)
-
-    payload = build_canonical_payload(
-        device_uuid=str(device.device_uuid),
-        request_uuid=str(updated.request_uuid),
-        sha256=updated.sha256,
-        expires_at=expires_at,
-        nonce=nonce,
-    )
-    signature = sign_payload(payload)
-
-    await approval_repository.create(
-        session,
-        elevation_request_id=updated.id,
-        device_uuid=device.device_uuid,
-        sha256=updated.sha256,
-        nonce=nonce,
-        issued_at=issued_at,
-        expires_at=expires_at,
-        signature=signature,
-    )
+    approval = await issue_approval(session, elevation_request=updated, device=device)
 
     await write_audit_log(
         session,
@@ -174,7 +150,7 @@ async def approve_elevation_request(
         action="elevation_request.approved",
         target_type="elevation_request",
         target_id=str(updated.id),
-        metadata={"nonce": nonce},
+        metadata={"nonce": approval.nonce},
     )
 
     await session.commit()
