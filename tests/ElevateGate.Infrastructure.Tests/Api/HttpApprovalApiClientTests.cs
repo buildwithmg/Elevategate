@@ -104,4 +104,28 @@ public class HttpApprovalApiClientTests
         Assert.Equal(RequestStatus.Denied, denied.Status);
         Assert.Null(denied.Token);
     }
+
+    [Fact]
+    public async Task SendHeartbeatAsync_PostsTelemetryAndParsesUpdateRequested()
+    {
+        var handler = new StubHttpMessageHandler(request =>
+        {
+            Assert.Equal(HttpMethod.Post, request.Method);
+            Assert.Equal("/api/v1/heartbeat", request.RequestUri!.AbsolutePath);
+            Assert.Equal("Bearer", request.Headers.Authorization?.Scheme);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new { updateRequested = true }),
+            };
+        });
+        var client = new HttpApprovalApiClient(CreateClient(handler));
+        var request = new HeartbeatRequest("1.0.3", 500_000_000_000, 100_000_000_000, 16_000_000_000, 8_000_000_000);
+
+        var result = await client.SendHeartbeatAsync("token-abc", request);
+
+        Assert.True(result.UpdateRequested);
+        Assert.NotNull(handler.LastRequestBody);
+        Assert.Contains("1.0.3", handler.LastRequestBody);
+        Assert.Contains("diskTotalBytes", handler.LastRequestBody);
+    }
 }

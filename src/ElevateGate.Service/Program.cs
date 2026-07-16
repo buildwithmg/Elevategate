@@ -9,6 +9,7 @@ using ElevateGate.Service.Options;
 using ElevateGate.Service.Pipes;
 using ElevateGate.Service.RequestTracking;
 using ElevateGate.Service.Security;
+using ElevateGate.Service.Telemetry;
 using ElevateGate.Service.Update;
 using ElevateGate.Service.Workers;
 using Microsoft.Extensions.Hosting.WindowsServices;
@@ -83,10 +84,13 @@ builder.Services.AddSingleton<PipeClientValidator>();
 // backend call.
 builder.Services.AddHttpClient<GitHubUpdateChecker>(client => client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddHttpClient<SelfUpdateApplier>(client => client.Timeout = TimeSpan.FromMinutes(10));
+builder.Services.AddSingleton<UpdateCoordinator>();
+builder.Services.AddSingleton<SystemTelemetryCollector>();
 
 builder.Services.AddHostedService<NamedPipeServer>();
 builder.Services.AddHostedService<ApprovalPollingWorker>();
 builder.Services.AddHostedService<SelfUpdateWorker>();
+builder.Services.AddHostedService<TelemetryWorker>();
 
 var host = builder.Build();
 host.Run();

@@ -8,7 +8,7 @@
     <!-- Must be bumped in lockstep with the GitHub release tag published for it (see
          ElevateGate.Service.Update.SelfUpdateWorker) - this is what the running process compares
          against the latest release's tag_name to decide whether to auto-update. -->
-    <Version>1.0.3</Version>
+    <Version>1.0.4</Version>
     <UserSecretsId>dotnet-ElevateGate.Service-d5b2dd19-d5a4-4e21-98c8-24c5067393d3</UserSecretsId>
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
     <InvariantGlobalization>true</InvariantGlobalization>

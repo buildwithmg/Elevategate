@@ -60,4 +60,20 @@ public sealed class HttpApprovalApiClient : IApprovalApiClient
         var decisions = await response.Content.ReadFromJsonAsync<List<ApprovalDecision>>(JsonOptions, cancellationToken);
         return decisions ?? [];
     }
+
+    public async Task<HeartbeatResult> SendHeartbeatAsync(
+        string bearerToken, HeartbeatRequest request, CancellationToken cancellationToken = default)
+    {
+        using var message = new HttpRequestMessage(HttpMethod.Post, "api/v1/heartbeat")
+        {
+            Content = JsonContent.Create(request, options: JsonOptions),
+        };
+        message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
+
+        using var response = await _httpClient.SendAsync(message, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        var result = await response.Content.ReadFromJsonAsync<HeartbeatResult>(JsonOptions, cancellationToken);
+        return result ?? throw new InvalidOperationException("Heartbeat response body was empty.");
+    }
 }

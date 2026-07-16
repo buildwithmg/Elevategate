@@ -52,4 +52,8 @@ public sealed class ElevateGateServiceOptions
     /// was actually run with if `-ServiceName` was ever overridden from its default.
     /// </summary>
     public string ServiceName { get; set; } = "ElevateGateAgent";
+
+    /// <summary>How often to report disk/RAM telemetry and this agent_version to the backend
+    /// (POST /api/v1/heartbeat), and pick up a dashboard "update now" request.</summary>
+    public int TelemetryIntervalMinutes { get; set; } = 5;
 }

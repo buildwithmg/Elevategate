@@ -11,4 +11,7 @@ public interface IApprovalApiClient
 
     Task<IReadOnlyList<ApprovalDecision>> PollDecisionsAsync(
         string bearerToken, string deviceId, DateTimeOffset sinceUtc, CancellationToken cancellationToken = default);
+
+    Task<HeartbeatResult> SendHeartbeatAsync(
+        string bearerToken, HeartbeatRequest request, CancellationToken cancellationToken = default);
 }

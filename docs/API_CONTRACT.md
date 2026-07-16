@@ -467,6 +467,35 @@ device's stale-but-still-pending requests to `expired` before returning.
 
 `token` is non-null if and only if `status` is `"approved"` — mirrors `ApprovalDecision(RequestId, Status, Token)`.
 
+### `POST /api/v1/heartbeat`
+
+Auth: device bearer token. Not part of the agent's originally-shipped contract — added alongside
+`ElevateGate.Infrastructure.Api.HttpApprovalApiClient.SendHeartbeatAsync` so the dashboard can show
+live disk/RAM telemetry and each device's running agent version, and so an admin's "update now"
+request (`POST /api/v1/devices/{id}/request-update`) actually reaches the device. Sent every
+`TelemetryIntervalMinutes` (agent-side setting, default 5).
+
+```json
+{
+  "agentVersion": "1.0.4",
+  "diskTotalBytes": 512110190592,
+  "diskFreeBytes": 128027557888,
+  "ramTotalBytes": 17179869184,
+  "ramUsedBytes": 8589934592
+}
+```
+
+All fields optional/nullable — a stat the agent couldn't read is simply omitted, never fabricated.
+
+→ `200`:
+
+```json
+{ "updateRequested": false }
+```
+
+`updateRequested` is `true` iff an admin has asked this device to update and it hasn't yet
+reported back a different `agentVersion` since that request — see `Device.update_requested_at`.
+
 ## Error responses
 
 Standard FastAPI shape: `{"detail": "human-readable message"}` (or FastAPI's structured
