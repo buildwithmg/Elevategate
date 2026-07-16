@@ -181,6 +181,35 @@ Enrollment alone grants no execution capability — every request still requires
 but an open enrollment endpoint is still unnecessary attack surface and should be closed off when
 the backend is built.
 
+### T11 — Compromised or spoofed auto-update
+
+`ElevateGate.Service.Update.SelfUpdateWorker` periodically checks GitHub Releases
+(`buildwithmg/Elevategate`) for a newer build and, if found, downloads and installs it —
+replacing both `ElevateGate.Service.exe` and `ElevateGate.Tray.exe` on disk and restarting the
+service, all running as LocalSystem. This is real elevated attack surface: anyone who could
+compromise the GitHub account/repo, or intercept/tamper with the download (TLS/HTTPS to
+`api.github.com`/GitHub's release CDN is the only integrity check in this version — there is
+**no code signing and no signature verification of the downloaded package**), could get
+arbitrary code to run as LocalSystem on every enrolled device that auto-updates. This is a
+materially larger risk than the rest of this threat model, which is otherwise designed so that a
+compromised backend or on-path attacker can, at worst, get a *human* to approve running something
+they've already seen (T6) — auto-update bypasses that human-approval design entirely for the
+agent's own binaries.
+
+Mitigations in this version: HTTPS-only (GitHub's own TLS), the update is scoped to a specific
+known repository (not attacker-controlled input), and `appsettings.json` (holding the real
+enrollment key/backend URL) is never touched by the updater — only the two executables are
+replaced. `AutoUpdateEnabled` can be set to `false` in `appsettings.json` to disable this entirely.
+
+**Not yet mitigated, and the single biggest gap in this feature**: there is no Authenticode code
+signing on the published `.exe` files, and no independent signature/hash verification of the
+downloaded release package before it's installed and run as LocalSystem. Closing this properly
+means code-signing both executables and having `SelfUpdateApplier` verify that signature (or at
+minimum a pinned SHA-256 checksum fetched over a channel independent of the download itself)
+before ever swapping a file into place. Treat auto-update as convenience, not yet as
+security-hardened, until that's done — organizations with a low risk tolerance for this specific
+exposure should set `AutoUpdateEnabled: false` and update deliberately instead.
+
 ## Residual risk / accepted limitations (MVP)
 
 - **In-flight request tracking is in-memory** (`RequestStateStore`). A service restart while a

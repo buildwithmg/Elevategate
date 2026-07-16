@@ -33,4 +33,23 @@ public sealed class ElevateGateServiceOptions
 
     /// <summary>How long an approval request may remain pending before the service gives up on it locally.</summary>
     public int RequestTimeToLiveMinutes { get; set; } = 30;
+
+    /// <summary>Whether to periodically check GitHub Releases for a newer build and install it automatically.</summary>
+    public bool AutoUpdateEnabled { get; set; } = true;
+
+    /// <summary>How often to check for a newer release.</summary>
+    public int AutoUpdateCheckIntervalHours { get; set; } = 6;
+
+    /// <summary>
+    /// GitHub "owner/repo" to check for releases - see ElevateGate.Core.Update.GitHubUpdateChecker.
+    /// </summary>
+    public string UpdateRepository { get; set; } = "buildwithmg/Elevategate";
+
+    /// <summary>
+    /// The name this process is registered under with the Service Control Manager (what
+    /// `New-Service -Name` / `sc create` used at install time) - needed so the self-updater can
+    /// restart the *service*, not just replace its files. Must match whatever the install script
+    /// was actually run with if `-ServiceName` was ever overridden from its default.
+    /// </summary>
+    public string ServiceName { get; set; } = "ElevateGateAgent";
 }

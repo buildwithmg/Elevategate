@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using ElevateGate.Core.Update;
 using ElevateGate.Tray.Ipc;
 
 namespace ElevateGate.Tray.UI;
@@ -33,17 +34,56 @@ public sealed class TrayApplicationContext : ApplicationContext
         _notifyIcon.DoubleClick += (_, _) => OpenRequestForm(null);
 
         ActivationChannel.StartListening(
-            path => _uiThreadMarshal.Invoke(() => OpenRequestForm(path)),
+            path => _uiThreadMarshal.Invoke(() => HandleActivation(path)),
             _activationListenerCts.Token);
 
         if (!string.IsNullOrWhiteSpace(initialFilePath))
             OpenRequestForm(initialFilePath);
     }
 
+    private void HandleActivation(string? pathOrSentinel)
+    {
+        if (pathOrSentinel == TrayActivationProtocol.RestartForUpdateSentinel)
+        {
+            RestartForUpdate();
+            return;
+        }
+
+        OpenRequestForm(pathOrSentinel);
+    }
+
     private void OpenRequestForm(string? prefilledPath)
     {
         using var form = new RequestForm(_pipeClient, prefilledPath, _notifyIcon);
         form.ShowDialog();
+    }
+
+    /// <summary>
+    /// Sent by the Service (already elevated) after it swaps ElevateGate.Tray.exe on disk for a
+    /// newer version. Unlike the user-initiated "Exit," this needs no UAC prompt - it never
+    /// writes anything, just launches the (already-replaced-by-the-Service) exe fresh as this
+    /// same unelevated user and lets this instance go. There's a brief gap with no tray icon
+    /// while the new process starts, not a gap in actual protection - the Service keeps enforcing
+    /// approvals throughout regardless of whether the tray is running at all.
+    /// </summary>
+    private void RestartForUpdate()
+    {
+        var exePath = Environment.ProcessPath;
+        if (string.IsNullOrEmpty(exePath) || !File.Exists(exePath))
+            return;
+
+        try
+        {
+            Process.Start(new ProcessStartInfo { FileName = exePath, UseShellExecute = true });
+        }
+        catch (Exception)
+        {
+            // If relaunching the new build fails for any reason, staying on the (still-running,
+            // still-functional) old build is safer than exiting into nothing.
+            return;
+        }
+
+        ExitThread();
     }
 
     /// <summary>

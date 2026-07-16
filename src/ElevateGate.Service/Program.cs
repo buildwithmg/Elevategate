@@ -1,4 +1,5 @@
 using ElevateGate.Core.Abstractions;
+using ElevateGate.Core.Update;
 using ElevateGate.Core.Validation;
 using ElevateGate.Infrastructure.Api;
 using ElevateGate.Infrastructure.Persistence;
@@ -8,6 +9,7 @@ using ElevateGate.Service.Options;
 using ElevateGate.Service.Pipes;
 using ElevateGate.Service.RequestTracking;
 using ElevateGate.Service.Security;
+using ElevateGate.Service.Update;
 using ElevateGate.Service.Workers;
 using Microsoft.Extensions.Hosting.WindowsServices;
 using Serilog;
@@ -76,8 +78,15 @@ builder.Services.AddSingleton<RequestCoordinator>();
 builder.Services.AddSingleton<ExecutionEngine>();
 builder.Services.AddSingleton<PipeClientValidator>();
 
+// A separate HttpClient from the backend one above - GitHub's API/CDN is a different host
+// entirely, and downloading a ~100MB release asset needs a much longer timeout than an ordinary
+// backend call.
+builder.Services.AddHttpClient<GitHubUpdateChecker>(client => client.Timeout = TimeSpan.FromSeconds(30));
+builder.Services.AddHttpClient<SelfUpdateApplier>(client => client.Timeout = TimeSpan.FromMinutes(10));
+
 builder.Services.AddHostedService<NamedPipeServer>();
 builder.Services.AddHostedService<ApprovalPollingWorker>();
+builder.Services.AddHostedService<SelfUpdateWorker>();
 
 var host = builder.Build();
 host.Run();

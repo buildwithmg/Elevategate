@@ -55,6 +55,9 @@ $settings.ElevateGate.ServerPublicKeyBase64 = $ServerPublicKeyBase64
 $settings.ElevateGate.EnrollmentKey = $EnrollmentKey
 $settings.ElevateGate.DataDirectory = "$env:ProgramData\ElevateGate"
 $settings.ElevateGate.ExpectedTrayExecutablePath = (Join-Path $InstallDir "ElevateGate.Tray.exe")
+# Must match whatever name is actually registered below, so the auto-updater can restart the
+# right SCM service after swapping files - see ElevateGate.Service.Update.SelfUpdateApplier.
+$settings.ElevateGate.ServiceName = $ServiceName
 $settings | ConvertTo-Json -Depth 10 | Set-Content $settingsPath
 
 $existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue

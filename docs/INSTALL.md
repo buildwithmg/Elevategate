@@ -33,6 +33,9 @@ What it does:
 6. Registers `ElevateGate.Tray.exe` to launch at login for any user (`HKLM\...\CurrentVersion\Run`)
    and starts it immediately in the current session, so the tray icon appears right away.
 
+Once installed, the Service checks GitHub for a newer release every few hours and installs it
+automatically (both exes, service auto-restarted, tray relaunched) — see "Auto-update" below.
+
 ## Install from source (for development)
 
 If you're working on the agent itself rather than just installing it, build and install from a
@@ -62,6 +65,23 @@ Optional parameters on either script: `-InstallDir` (default `%ProgramFiles%\Ele
   runs per user session — a second launch (e.g. via the context-menu verb) hands off to the
   already-running icon instead of spawning a duplicate.
 
+## Auto-update
+
+The Service checks `github.com/buildwithmg/Elevategate` releases every `AutoUpdateCheckIntervalHours`
+(default 6, starting ~2 minutes after the service starts) and, if a newer version is published,
+downloads and installs it without any user interaction: both `.exe` files are swapped in place
+(your `appsettings.json` — enrollment key, backend URL, everything — is left untouched), the
+service restarts itself, and any running tray icon relaunches from the new build.
+
+Set `"AutoUpdateEnabled": false` in `appsettings.json` to turn this off entirely and update
+manually (re-run the one-liner, or `Install-FromRelease.ps1`, whenever you choose to).
+
+> **Know the trade-off before leaving this on**: there is no code signing or signature
+> verification on the downloaded release yet — HTTPS to GitHub is the only integrity check. This
+> means auto-update is convenience, not yet a hardened channel; see [THREAT_MODEL.md](THREAT_MODEL.md)
+> (T11) for the full reasoning. If that risk doesn't fit your environment, disable auto-update and
+> update deliberately instead.
+
 ## Uninstall
 
 ```powershell
@@ -85,6 +105,10 @@ credential) instead of deleting it.
 | `PipeName` | Named pipe the tray connects to (default `ElevateGate.Agent`) |
 | `ExpectedTrayExecutablePath` | Exact path the connecting tray process must match |
 | `RequestTimeToLiveMinutes` | How long a pending request is tracked locally |
+| `AutoUpdateEnabled` | Whether to auto-check/install newer releases (default `true`) |
+| `AutoUpdateCheckIntervalHours` | How often to check for a newer release (default 6) |
+| `UpdateRepository` | GitHub `owner/repo` to check (default `buildwithmg/Elevategate`) |
+| `ServiceName` | The SCM service name this was installed under — must match reality so the updater can restart the right service |
 
 Changing `PipeName` or `ExpectedTrayExecutablePath` requires the tray and service to agree — if
 you relocate the install directory manually instead of via the install script, update

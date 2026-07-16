@@ -1,4 +1,5 @@
 using System.IO.Pipes;
+using ElevateGate.Core.Update;
 
 namespace ElevateGate.Tray.Ipc;
 
@@ -7,11 +8,13 @@ namespace ElevateGate.Tray.Ipc;
 /// tray is already running in the background) hand its file path to the already-running
 /// instance instead of silently doing nothing. Purely a same-user UI convenience — carries no
 /// security weight, since the service re-validates any path it's ever given regardless of which
-/// tray instance forwarded it.
+/// tray instance forwarded it. Also used by the Service (see SelfUpdateApplier) to tell an
+/// already-running tray to relaunch itself after an auto-update - see
+/// TrayActivationProtocol.RestartForUpdateSentinel.
 /// </summary>
 public static class ActivationChannel
 {
-    private const string PipeName = "ElevateGate.Tray.Activation";
+    private const string PipeName = TrayActivationProtocol.PipeName;
 
     public static bool TrySendToRunningInstance(string? filePath)
     {

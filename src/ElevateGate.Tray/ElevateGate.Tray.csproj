@@ -7,6 +7,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>ElevateGate.Tray</RootNamespace>
+    <!-- Kept in lockstep with ElevateGate.Service's <Version> and the release tag - the Tray
+         doesn't check for updates itself (the Service does, for both exes), but this keeps both
+         binaries reporting a consistent, meaningful version. -->
+    <Version>1.0.3</Version>
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
     <InvariantGlobalization>true</InvariantGlobalization>
     <!-- Allows `dotnet build` to compile this net8.0-windows project from a non-Windows dev machine. -->
